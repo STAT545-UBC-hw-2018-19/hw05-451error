@@ -199,8 +199,11 @@ We can also convert the above plot using `ggplotly` function in the `plotly` pac
 
 ```{r}
 library(plotly)
-ggplotly(gdp_asia_plot)
+ggplotly(gdp_asia_plot) %>% 
+  htmlwidgets::saveWidget(file = "ggplotly_gdp_asia.html")
 ```
+
+We can't display `plotly` plots here, but the so the `R` code would need to be run in order to interact with this plot. The HTML output has been saved [here](https://github.com/STAT545-UBC-students/hw05-451error/blob/master/ggplotly_gdp_asia.html)
 
 ## Part 4: Writing figures to file
 
