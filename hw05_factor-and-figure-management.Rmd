@@ -1,0 +1,223 @@
+---
+title: "Homework 05 - Factor and figure management"
+output: github_document
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Load packages
+
+```{r message=FALSE}
+library(gapminder)
+library(tidyverse)
+library(knitr)
+```
+
+## Part 1: Factor Management
+
+I will use the gapminder dataset for this exercise.
+
+### Drop level/factors
+
+The original gapminder data looks like:
+
+```{r}
+head(gapminder)
+str(gapminder)
+```
+
+We see that there are 5 levels of continent.
+
+```{r}
+levels(gapminder$continent)
+```
+
+Let's see what happens when we remove all observations where the continent is Oceania. We can remove all occurances of Oceania under continents using `filter` and observe how this affects the dataframe:
+```{r}
+gapminder_no_ocean = gapminder %>% 
+  filter(continent != 'Oceania')
+
+gapminder_no_ocean %>% str()
+levels(gapminder_no_ocean$continent)
+```
+
+We see that despite there are now fewer observations in the dataframe, however the factor levels of continent is still 5. Despite removing the occurances of Oceania, it is still a level in the factor. We can remove this level altogether with `droplevels()`
+
+```{r}
+gapminder_no_ocean = gapminder_no_ocean %>% 
+  droplevels()
+
+gapminder_no_ocean %>% str()
+levels(gapminder_no_ocean$continent)
+```
+
+Now that we applied `droplevels()` to this dataset, we see that the continent has 4 levels, and Oceania is no longer a level of continent.
+
+### Reorder levels
+
+By default, R will order the levels alphabetically. We can see this if we do a basic bar plot of number of observations:
+
+```{r}
+gapminder %>% 
+  ggplot(aes(continent))+
+  geom_bar(aes(fill=continent))
+```
+
+However, we would find it more helpful if the ordering has actual meaning. To do this, we can use `mutate` and `fct_reorder`
+
+```{r}
+gapminder %>% 
+  mutate(continent=fct_reorder(continent,pop)) %>% 
+  ggplot(aes(continent))+
+  geom_bar(aes(fill=continent))
+```
+
+Here, we ordered the rows by the populations. Since there are multiple values for population for each continent, `R` arranged the bars based on the median. we could also specify functions other than `median`:
+
+```{r}
+gapminder %>% 
+  mutate(continent=fct_reorder(continent,pop, .fun = function(x) sum(x)^2/length(x))) %>% 
+  ggplot(aes(continent))+
+  geom_bar(aes(fill=continent))
+
+```
+
+We can do this for more than bar plots. Let's examine GDP data for Asia in 2007:
+```{r}
+gapminder_asia = gapminder %>% 
+  filter(continent == 'Asia')
+gapminder_asia %>% 
+  ggplot(aes(gdpPercap,country))+
+  scale_x_log10() +
+  geom_point(aes(color=year))
+```
+
+This is the default ordering done by `R`. Once again we would like this to be ordered:
+
+```{r}
+gapminder_asia %>% 
+  mutate(country=fct_reorder(country,gdpPercap)) %>% 
+  ggplot(aes(gdpPercap,country)) +
+  scale_x_log10() +
+  geom_point(aes(color=year))
+```
+
+Like the bar plot before, `R` uses the default function of `median` for the sorting. We can also specify a different function:
+```{r}
+gapminder_asia %>% 
+  mutate(country=fct_reorder(country,gdpPercap,.fun=function(x) max(x)-min(x))) %>% 
+  ggplot(aes(gdpPercap,country)) +
+  scale_x_log10() +
+  geom_point(aes(color=year))
+```
+
+We see that with a different function, the ordering is slightly different. Here we made our own function that gives the spread of the GDP. Note that the range of the points along each row doesn't quite look like they are getting bigger the higher up we go, but this is because the x-axis is on a log scale.
+
+
+## Part 2: File I/O
+
+We will take our `gapminder_asia` dataframe, add a few columns. We will also change the years to a factor and the population to a string. , We will save the resulting dataframe to a `.csv` file:
+
+```{r}
+gapminder_to_export = gapminder_asia %>% 
+  mutate(pop_indicator = ifelse(pop>mean(pop),'high','low'),
+         lifeExp_indicator = ifelse(lifeExp>mean(pop),'high','low'),
+         pop = as.character(pop),
+         year = as.factor(year))
+gapminder_to_export %>% 
+  write_csv('gapminder_asia.csv')
+str(gapminder_to_export)
+```
+
+The csv file is saved [here](https://github.com/STAT545-UBC-students/hw05-451error/blob/master/gapminder_asia.csv). We can now read back the csv file to see how many of the changes we made survived writing to file:
+
+```{r}
+gapminder_csv_import = read_csv('gapminder_asia.csv')
+gapminder_csv_import %>% str()
+```
+
+We see that based on the default options loaded texts as `characters` and anything that looks like a number as a `num` or `int`. In order to have `R` load the csv file the way we want, we could use the function `read.csv()` instead and use the option `colClasses` to specify the format that we want each column to be read:
+
+```{r}
+gapminder_csv_import = read.csv('gapminder_asia.csv',
+                                colClasses = c(rep('factor',3),
+                                               rep('numeric',3),
+                                               rep('factor',2)))
+gapminder_csv_import %>% str()
+```
+
+
+## Part 3: Visualization design
+
+I will try to improve upon the graph used in the previous part, namely the Asian countries GDP plot, recreated here:
+
+```{r}
+gapminder_asia %>% 
+  mutate(country=fct_reorder(country,gdpPercap,.fun=function(x) max(x)-min(x))) %>% 
+  ggplot(aes(gdpPercap,country)) +
+  scale_x_log10() +
+  geom_point(aes(color=year))
+```
+
+We see that the scientific numbering of the x-axis is not very user-friendly and the different colours for the years is not too helpful. We also re-name the axis and change the theme so the background isn't grey..
+
+```{r}
+library(scales)
+
+gdp_asia_plot = gapminder_asia %>% 
+  mutate(country=fct_reorder(country,gdpPercap,.fun=function(x) max(x)-min(x))) %>% 
+  ggplot(aes(gdpPercap,country)) +
+  scale_x_log10(labels=dollar_format()) +
+  geom_point(aes(color=country)) +
+  labs(x='GDP per capita',
+       y = 'Country')+
+  scale_color_discrete(guide=F)+
+  theme_light()
+gdp_asia_plot
+```
+
+Now it might not make sense to change all the years to have the same colour since we can't tell them apart, but I plan on using `gganimate` to animate the plot so that the plot will changes in the GDP by year, and this will not be an issue any more. I first install `gganimate` as below. `install.packages('gganimate')` is not supported as it is not yet available on CRAN.
+```{r}
+# install.packages('devtools')
+# devtools::install_github('thomasp85/gganimate')
+library(gganimate)
+```
+
+The animated plot is below:
+```{r}
+gdp_asia_plot+
+  labs(title = 'Year: {frame_time}', x = 'GDP per capita', y = 'Country') +
+  transition_time(year) +
+  ease_aes('linear')
+```
+
+We can also convert the above plot using `ggplotly` function in the `plotly` package. 
+
+```{r}
+library(plotly)
+ggplotly(gdp_asia_plot)
+```
+
+## Part 4: Writing figures to file
+
+I can save `gdp_asia_plot` from the previous part using the `ggsave` command:
+
+```{r}
+ggsave('gdp_asia.png',width = 6,height=6,gdp_asia_plot)
+```
+
+The saved image can be found [here](https://github.com/STAT545-UBC-students/hw05-451error/blob/master/gdp_asia.png), and here it is:
+
+![here's my plot](https://github.com/STAT545-UBC-students/hw05-451error/raw/master/gdp_asia.png)
+
+We can also save it in a vector format thus:
+
+```{r}
+ggsave('gdp_asia.svg',width = 6,height=6, gdp_asia_plot)
+```
+
+And the saved image can be found [here](https://github.com/STAT545-UBC-students/hw05-451error/blob/master/gdp_asia.svg).
